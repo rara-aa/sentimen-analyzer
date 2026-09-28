@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Feedback Sentiment Analyzer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #f3f4f6; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .badge-positive  { background:#d1fae5; color:#065f46; }
+    .badge-neutral   { background:#fef9c3; color:#854d0e; }
+    .badge-negative  { background:#fee2e2; color:#991b1b; }
+    .kpi-card        { transition: box-shadow .15s; }
+    .kpi-card:hover  { box-shadow: 0 4px 18px rgba(0,0,0,.10); }
+    #dropzone.drag-over { border-color:#3b82f6; background:#eff6ff; }
+    textarea:focus, input:focus { outline: none; }
+    .table-row:hover { background:#f9fafb; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:3px; }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold text-gray-900 leading-tight">Customer Feedback Sentiment Analyzer</h1>
+        <p class="text-xs text-gray-500">Analisis sentimen ulasan pelanggan secara otomatis</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 mt-8 space-y-8">
+
+    <!-- Input Section -->
+    <section class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Input Ulasan</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Manual Text Input -->
+        <div class="flex flex-col gap-3">
+          <label class="text-sm font-medium text-gray-700">Tulis / Tempel Ulasan</label>
+          <textarea
+            id="textInput"
+            rows="6"
+            placeholder="Masukkan satu ulasan per baris, contoh:&#10;Produknya sangat bagus dan pengiriman cepat!&#10;Pelayanan biasa saja, tidak ada yang istimewa.&#10;Barang rusak saat tiba, sangat mengecewakan."
+            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
+          ></textarea>
+          <button
+            onclick="analyzeFromText()"
+            class="self-start bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+          >Analisis Teks</button>
+        </div>
+
+        <!-- File Upload -->
+        <div class="flex flex-col gap-3">
+          <label class="text-sm font-medium text-gray-700">Upload File CSV / JSON</label>
+          <div
+            id="dropzone"
+            onclick="document.getElementById('fileInput').click()"
+            class="flex-1 min-h-[140px] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 cursor-pointer text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors px-4 text-center"
+          >
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            <span class="text-sm font-medium">Klik atau seret file ke sini</span>
+            <span class="text-xs">Mendukung .csv dan .json</span>
+          </div>
+          <input type="file" id="fileInput" accept=".csv,.json" class="hidden" onchange="handleFile(event)" />
+          <div id="fileInfo" class="text-xs text-gray-500 hidden"></div>
+          <div class="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 border border-gray-200 leading-relaxed">
+            <p class="font-medium text-gray-600 mb-1">Format yang didukung:</p>
+            <p><strong>CSV:</strong> kolom <code class="bg-gray-200 px-1 rounded">review</code>, <code class="bg-gray-200 px-1 rounded">text</code>, atau <code class="bg-gray-200 px-1 rounded">ulasan</code></p>
+            <p><strong>JSON:</strong> array objek dengan key <code class="bg-gray-200 px-1 rounded">review</code>, <code class="bg-gray-200 px-1 rounded">text</code>, atau <code class="bg-gray-200 px-1 rounded">ulasan</code></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="errorMsg" class="hidden mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5"></div>
+    </section>
+
+    <!-- Results (hidden until analyzed) -->
+    <div id="resultsSection" class="hidden space-y-8">
+
+      <!-- KPI Cards -->
+      <section>
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Ringkasan KPI</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="kpi-card bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Ulasan</p>
+            <p id="kpiTotal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
+          </div>
+          <div class="kpi-card bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Positif</p>
+            <p id="kpiPositive" class="text-3xl font-bold text-emerald-600 mt-1">0%</p>
+            <p id="kpiPositiveCount" class="text-xs text-gray-400 mt-0.5">0 ulasan</p>
+          </div>
+          <div class="kpi-card bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Netral</p>
+            <p id="kpiNeutral" class="text-3xl font-bold text-amber-500 mt-1">0%</p>
+            <p id="kpiNeutralCount" class="text-xs text-gray-400 mt-0.5">0 ulasan</p>
+          </div>
+          <div class="kpi-card bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Negatif</p>
+            <p id="kpiNegative" class="text-3xl font-bold text-red-600 mt-1">0%</p>
+            <p id="kpiNegativeCount" class="text-xs text-gray-400 mt-0.5">0 ulasan</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Chart -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-5">Distribusi Sentimen</h2>
+          <div class="flex items-center justify-center" style="height:260px">
+            <canvas id="sentimentChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Sentiment Score Bar -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 flex flex-col justify-between">
+          <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-5">Distribusi Proporsi</h2>
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between text-xs text-gray-600 mb-1">
+                <span class="font-medium text-emerald-700">Positif</span>
+                <span id="barPosLabel">0%</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-3">
+                <div id="barPos" class="bg-emerald-500 h-3 rounded-full transition-all duration-700" style="width:0%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-gray-600 mb-1">
+                <span class="font-medium text-amber-600">Netral</span>
+                <span id="barNeuLabel">0%</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-3">
+                <div id="barNeu" class="bg-amber-400 h-3 rounded-full transition-all duration-700" style="width:0%"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs text-gray-600 mb-1">
+                <span class="font-medium text-red-600">Negatif</span>
+                <span id="barNegLabel">0%</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-3">
+                <div id="barNeg" class="bg-red-500 h-3 rounded-full transition-all duration-700" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-gray-100">
+              <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Skor Sentimen Keseluruhan</p>
+              <div class="flex items-end gap-2">
+                <p id="overallScore" class="text-4xl font-bold text-gray-900">—</p>
+                <p id="overallLabel" class="text-sm text-gray-400 mb-1.5"></p>
+              </div>
+              <p class="text-xs text-gray-400 mt-1">Skala: −100 (sangat negatif) hingga +100 (sangat positif)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Table -->
+      <section class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Detail Ulasan</h2>
+          <div class="flex items-center gap-3">
+            <input
+              type="text"
+              id="tableSearch"
+              placeholder="Cari ulasan..."
+              oninput="filterTable()"
+              class="border border-gray-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-48"
+            />
+            <select
+              id="tableFilter"
+              onchange="filterTable()"
+              class="border border-gray-300 rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Semua</option>
+              <option value="positive">Positif</option>
+              <option value="neutral">Netral</option>
+              <option value="negative">Negatif</option>
+            </select>
+            <button onclick="exportCSV()" class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg px-3 py-1.5 transition-colors font-medium">
+              Export CSV
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
+                <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ulasan</th>
+                <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">Sentimen</th>
+                <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Skor</th>
+              </tr>
+            </thead>
+            <tbody id="reviewTable"></tbody>
+          </table>
+          <div id="emptyTable" class="hidden text-center py-10 text-sm text-gray-400">Tidak ada ulasan yang cocok.</div>
+        </div>
+        <div class="px-6 py-3 border-t border-gray-100 flex justify-between items-center">
+          <p id="tableCount" class="text-xs text-gray-400"></p>
+          <button onclick="clearAll()" class="text-xs text-gray-400 hover:text-red-500 transition-colors">Hapus semua data</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="text-center py-20 text-gray-400">
+      <svg class="w-14 h-14 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+      </svg>
+      <p class="font-medium text-gray-500">Belum ada data ulasan</p>
+      <p class="text-sm mt-1">Masukkan teks ulasan atau upload file CSV/JSON untuk memulai analisis.</p>
+    </div>
+
+  </main>
+
+  <script>
+    // ─── Lexicon ───────────────────────────────────────────────────────────────
+    const POSITIVE_WORDS = new Set([
+      'bagus','baik','hebat','luar biasa','mantap','keren','sempurna','puas','senang','suka',
+      'cepat','ramah','memuaskan','terbaik','recommended','rekomendasi','oke','ok','top',
+      'berkualitas','berkualiti','statisfied','satisfied','happy','good','great','excellent',
+      'amazing','awesome','fantastic','wonderful','love','best','fast','nice','perfect',
+      'super','pro','fresh','baru','bersih','mulus','lancar','mudah','nyaman','indah',
+      'cantik','ganteng','murah','terjangkau','worth','worth it','sip','ajib','waw','wow',
+      'istimewa','spesial','berhasil','sukses','works','work','helpful','help','terima kasih',
+      'makasih','thanks','thank','terbantu','membantu','sesuai','tepat','akurat','benar',
+      'jelas','detail','lengkap','original','asli','original','genuine','terpercaya','amanah',
+      'aman','terjamin','dijamin','packing','pack','rapi','oke banget','kualitas bagus',
+      'pelayanan bagus','pengiriman cepat','respon cepat','fast respon','fast response',
+      'responsif','aktif','profesional','andal','handal','tahan lama','awet'
+    ]);
+
+    const NEGATIVE_WORDS = new Set([
+      'jelek','buruk','rusak','hancur','pecah','cacat','mengecewakan','kecewa','sedih','marah',
+      'benci','tidak suka','tidak bagus','tidak baik','tidak memuaskan','tidak puas','lambat',
+      'lama','telat','delay','delayed','terlambat','palsu','fake','tiruan','bohong','tipu',
+      'penipuan','scam','sampah','busuk','bau','kotor','jorok','jelek banget','parah',
+      'mengecewakan','tidak sesuai','tidak tepat','tidak cocok','tidak berfungsi','tidak work',
+      'not work','broken','bad','terrible','horrible','awful','worst','ugly','dirty','slow',
+      'late','fake','fraud','lie','disappointed','disappointing','complaint','komplain',
+      'refund','retur','return','cancel','batal','kapok','jera','nyesel','menyesal','rugi',
+      'mahal','overprice','overpriced','tidak worth','not worth','berat','repot','susah',
+      'sulit','ribet','rumit','error','bug','hang','crash','lemot','lemoh','payah','gagal',
+      'fail','failed','salah','keliru','kurang','minim','ngecewain','mengecewain','zonk',
+      'curang','nipu','abal','tidak original','tidak asli','kw','bekas','lewat','gosong',
+      'expired','kedaluwarsa','tengik','berbau','tidak aman','bahaya','berbahaya'
+    ]);
+
+    const NEGATION_WORDS = new Set([
+      'tidak','tidak ada','tidak bisa','tidak mau','bukan','jangan','belum','tanpa','tak',
+      'tiada','no','not','never','nope'
+    ]);
+
+    const INTENSIFIER_WORDS = {
+      'sangat':1.5,'amat':1.5,'banget':1.4,'sekali':1.4,'benar-benar':1.5,'beneran':1.3,
+      'sungguh':1.5,'terlalu':1.3,'super':1.4,'paling':1.5,'most':1.4,'very':1.5,'so':1.3,
+      'extremely':1.6,'really':1.4,'too':1.2,'quite':1.1,'cukup':1.1,'lumayan':1.1
+    };
+
+    // ─── Sentiment Engine ──────────────────────────────────────────────────────
+    function analyzeSentiment(text) {
+      const lower = text.toLowerCase();
+      const tokens = lower.split(/[\s,!?.;:]+/).filter(Boolean);
+
+      let score = 0;
+      let posCount = 0;
+      let negCount = 0;
+
+      // bi-gram check for multi-word phrases
+      for (let i = 0; i < tokens.length; i++) {
+        const bigram = tokens[i] + (tokens[i+1] ? ' ' + tokens[i+1] : '');
+        const trigram = bigram + (tokens[i+2] ? ' ' + tokens[i+2] : '');
+
+        let word = tokens[i];
+        let isNegated = i > 0 && NEGATION_WORDS.has(tokens[i - 1]);
+        let multiplier = 1;
+
+        // Check intensifier before word
+        if (i > 0 && INTENSIFIER_WORDS[tokens[i - 1]]) {
+          multiplier = INTENSIFIER_WORDS[tokens[i - 1]];
+        }
+
+        // Check phrase matches first
+        let matched = false;
+        if (POSITIVE_WORDS.has(trigram)) { score += (isNegated ? -1 : 1) * 3 * multiplier; posCount++; matched = true; }
+        else if (POSITIVE_WORDS.has(bigram)) { score += (isNegated ? -1 : 1) * 2 * multiplier; posCount++; matched = true; }
+        else if (NEGATIVE_WORDS.has(trigram)) { score += (isNegated ? 1 : -1) * 3 * multiplier; negCount++; matched = true; }
+        else if (NEGATIVE_WORDS.has(bigram)) { score += (isNegated ? 1 : -1) * 2 * multiplier; negCount++; matched = true; }
+
+        if (!matched) {
+          if (POSITIVE_WORDS.has(word)) {
+            score += (isNegated ? -1 : 1) * 1 * multiplier;
+            if (!isNegated) posCount++; else negCount++;
+          } else if (NEGATIVE_WORDS.has(word)) {
+            score += (isNegated ? 1 : -1) * 1 * multiplier;
+            if (!isNegated) negCount++; else posCount++;
+          }
+        }
+
+        // Emoji detection
+        if (/[😊😍🥰😁😄😃😀🎉👍✅💯🔥❤️🌟⭐]/.test(text)) score += 1;
+        if (/[😢😭😡🤬👎💔😤😠😞😒]/.test(text)) score -= 1;
+      }
+
+      // Normalize score to -100..+100
+      const maxPossible = Math.max(tokens.length, 1) * 1.6;
+      const normalizedScore = Math.round((score / maxPossible) * 100);
+      const clampedScore = Math.max(-100, Math.min(100, normalizedScore));
+
+      let label, confidence;
+      if (clampedScore >= 15) { label = 'positive'; }
+      else if (clampedScore <= -15) { label = 'negative'; }
+      else { label = 'neutral'; }
+
+      return { label, score: clampedScore, raw: score };
+    }
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+    let allReviews = [];
+    let chartInstance = null;
+
+    // ─── Text Analysis ─────────────────────────────────────────────────────────
+    function analyzeFromText() {
+      const raw = document.getElementById('textInput').value.trim();
+      if (!raw) { showError('Harap masukkan teks ulasan terlebih dahulu.'); return; }
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) { showError('Tidak ada ulasan yang valid ditemukan.'); return; }
+      hideError();
+      const reviews = lines.map(text => ({ text, ...analyzeSentiment(text) }));
+      renderResults(reviews);
+    }
+
+    // ─── File Upload ───────────────────────────────────────────────────────────
+    function handleFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      processFile(file);
+    }
+
+    function processFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const ext = file.name.split('.').pop().toLowerCase();
+        try {
+          let reviews = [];
+          if (ext === 'json') {
+            reviews = parseJSON(content);
+          } else if (ext === 'csv') {
+            reviews = parseCSV(content);
+          } else {
+            showError('Format file tidak didukung. Gunakan .csv atau .json');
+            return;
+          }
+          if (!reviews.length) { showError('Tidak ada ulasan yang valid ditemukan dalam file.'); return; }
+          hideError();
+          document.getElementById('fileInfo').textContent = `✓ ${file.name} — ${reviews.length} ulasan dimuat`;
+          document.getElementById('fileInfo').classList.remove('hidden');
+          renderResults(reviews);
+        } catch(err) {
+          showError('Gagal memproses file: ' + err.message);
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    function parseJSON(content) {
+      const data = JSON.parse(content);
+      const arr = Array.isArray(data) ? data : (data.reviews || data.data || []);
+      return arr.map(item => {
+        const text = item.review || item.text || item.ulasan || item.feedback || item.comment || String(item);
+        return { text: text.trim(), ...analyzeSentiment(text.trim()) };
+      }).filter(r => r.text);
+    }
+
+    function parseCSV(content) {
+      const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return [];
+      const headers = lines[0].split(',').map(h => h.toLowerCase().replace(/['"]/g,'').trim());
+      const colIdx = ['review','text','ulasan','feedback','comment','komentar'].reduce((best, key) => {
+        const idx = headers.indexOf(key);
+        return idx !== -1 && best === -1 ? idx : best;
+      }, -1);
+
+      // No header match — treat each line as a review (if first line doesn't look like header)
+      if (colIdx === -1) {
+        return lines.map(l => {
+          const text = l.replace(/^["']|["']$/g,'').trim();
+          return { text, ...analyzeSentiment(text) };
+        }).filter(r => r.text);
+      }
+
+      return lines.slice(1).map(line => {
+        const cols = splitCSVLine(line);
+        const text = (cols[colIdx] || '').replace(/^["']|["']$/g,'').trim();
+        return { text, ...analyzeSentiment(text) };
+      }).filter(r => r.text);
+    }
+
+    function splitCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQuote = !inQuote; }
+        else if (ch === ',' && !inQuote) { result.push(current); current = ''; }
+        else { current += ch; }
+      }
+      result.push(current);
+      return result;
+    }
+
+    // ─── Drag & Drop ───────────────────────────────────────────────────────────
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    });
+
+    // ─── Render ────────────────────────────────────────────────────────────────
+    function renderResults(reviews) {
+      allReviews = reviews;
+
+      const total = reviews.length;
+      const pos = reviews.filter(r => r.label === 'positive').length;
+      const neu = reviews.filter(r => r.label === 'neutral').length;
+      const neg = reviews.filter(r => r.label === 'negative').length;
+
+      const pPct = total ? Math.round(pos / total * 100) : 0;
+      const nePct = total ? Math.round(neu / total * 100) : 0;
+      const ngPct = total ? Math.round(neg / total * 100) : 0;
+
+      // KPIs
+      document.getElementById('kpiTotal').textContent = total;
+      document.getElementById('kpiPositive').textContent = pPct + '%';
+      document.getElementById('kpiPositiveCount').textContent = pos + ' ulasan';
+      document.getElementById('kpiNeutral').textContent = nePct + '%';
+      document.getElementById('kpiNeutralCount').textContent = neu + ' ulasan';
+      document.getElementById('kpiNegative').textContent = ngPct + '%';
+      document.getElementById('kpiNegativeCount').textContent = neg + ' ulasan';
+
+      // Bars
+      document.getElementById('barPos').style.width = pPct + '%';
+      document.getElementById('barPosLabel').textContent = pPct + '%';
+      document.getElementById('barNeu').style.width = nePct + '%';
+      document.getElementById('barNeuLabel').textContent = nePct + '%';
+      document.getElementById('barNeg').style.width = ngPct + '%';
+      document.getElementById('barNegLabel').textContent = ngPct + '%';
+
+      // Overall score
+      const avgScore = total ? Math.round(reviews.reduce((s, r) => s + r.score, 0) / total) : 0;
+      document.getElementById('overallScore').textContent = (avgScore > 0 ? '+' : '') + avgScore;
+      const scoreEl = document.getElementById('overallScore');
+      scoreEl.className = 'text-4xl font-bold ' + (avgScore >= 15 ? 'text-emerald-600' : avgScore <= -15 ? 'text-red-600' : 'text-amber-500');
+      document.getElementById('overallLabel').textContent = avgScore >= 15 ? 'Cenderung Positif' : avgScore <= -15 ? 'Cenderung Negatif' : 'Cenderung Netral';
+
+      // Chart
+      renderChart(pos, neu, neg);
+
+      // Table
+      renderTable(reviews);
+
+      // Show results
+      document.getElementById('resultsSection').classList.remove('hidden');
+      document.getElementById('emptyState').classList.add('hidden');
+    }
+
+    function renderChart(pos, neu, neg) {
+      const ctx = document.getElementById('sentimentChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Positif', 'Netral', 'Negatif'],
+          datasets: [{
+            data: [pos, neu, neg],
+            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            borderColor: ['#ffffff', '#ffffff', '#ffffff'],
+            borderWidth: 3,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '62%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { padding: 16, font: { size: 12 }, usePointStyle: true, pointStyleWidth: 10 }
+            },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+                  const pct = total ? Math.round(ctx.parsed / total * 100) : 0;
+                  return ` ${ctx.label}: ${ctx.parsed} ulasan (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTable(reviews) {
+      const tbody = document.getElementById('reviewTable');
+      tbody.innerHTML = '';
+      reviews.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.className = 'table-row border-b border-gray-100 last:border-0';
+        tr.dataset.label = r.label;
+        tr.dataset.text = r.text.toLowerCase();
+        const badgeClass = r.label === 'positive' ? 'badge-positive' : r.label === 'negative' ? 'badge-negative' : 'badge-neutral';
+        const labelText = r.label === 'positive' ? 'Positif' : r.label === 'negative' ? 'Negatif' : 'Netral';
+        const scoreColor = r.score >= 15 ? 'text-emerald-600' : r.score <= -15 ? 'text-red-500' : 'text-amber-500';
+        tr.innerHTML = `
+          <td class="px-6 py-3.5 text-gray-400 text-xs">${i + 1}</td>
+          <td class="px-6 py-3.5 text-gray-700 leading-relaxed">${escapeHtml(r.text)}</td>
+          <td class="px-6 py-3.5">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${badgeClass}">${labelText}</span>
+          </td>
+          <td class="px-6 py-3.5 font-semibold text-sm ${scoreColor}">${r.score > 0 ? '+' : ''}${r.score}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      updateTableCount();
+    }
+
+    // ─── Table Filter & Search ─────────────────────────────────────────────────
+    function filterTable() {
+      const search = document.getElementById('tableSearch').value.toLowerCase();
+      const filter = document.getElementById('tableFilter').value;
+      const rows = document.querySelectorAll('#reviewTable tr');
+      let visible = 0;
+      rows.forEach(row => {
+        const matchLabel = filter === 'all' || row.dataset.label === filter;
+        const matchText = !search || row.dataset.text.includes(search);
+        const show = matchLabel && matchText;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      document.getElementById('emptyTable').classList.toggle('hidden', visible > 0);
+      document.getElementById('tableCount').textContent = `Menampilkan ${visible} dari ${allReviews.length} ulasan`;
+    }
+
+    function updateTableCount() {
+      document.getElementById('tableCount').textContent = `Menampilkan ${allReviews.length} ulasan`;
+    }
+
+    // ─── Export CSV ────────────────────────────────────────────────────────────
+    function exportCSV() {
+      if (!allReviews.length) return;
+      const header = 'No,Ulasan,Sentimen,Skor\n';
+      const rows = allReviews.map((r, i) => {
+        const label = r.label === 'positive' ? 'Positif' : r.label === 'negative' ? 'Negatif' : 'Netral';
+        return `${i+1},"${r.text.replace(/"/g,'""')}",${label},${r.score}`;
+      }).join('\n');
+      const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'hasil-sentimen.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ─── Clear ─────────────────────────────────────────────────────────────────
+    function clearAll() {
+      allReviews = [];
+      document.getElementById('textInput').value = '';
+      document.getElementById('fileInput').value = '';
+      document.getElementById('fileInfo').classList.add('hidden');
+      document.getElementById('resultsSection').classList.add('hidden');
+      document.getElementById('emptyState').classList.remove('hidden');
+      document.getElementById('tableFilter').value = 'all';
+      document.getElementById('tableSearch').value = '';
+      hideError();
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+    function hideError() { document.getElementById('errorMsg').classList.add('hidden'); }
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+
+</body>
+</html>
